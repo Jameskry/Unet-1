@@ -15,6 +15,7 @@ class DataProvider(object):
         self.liver_path = '/dfsdata/zhangyao_data/DB/LITS/volume/'
         self.batch_size = batch_size
         self.liver_size = 128
+        print 'train, eval, test list len:', self.train_data_len, self.eval_data_len, self.test_data_len
 
     def next_train_batch(self):
         image_list = []
