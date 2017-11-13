@@ -5,12 +5,14 @@ random.seed(datetime.datetime.now().second)
 
 
 class DataProvider(object):
-    def __init__(self, train_data_path, test_data_path, batch_size):
+    def __init__(self, train_data_path, eval_data_path, test_data_path, batch_size):
         self.train_data_list = open(train_data_path, 'r').read().splitlines()
+        self.eval_data_list = open(train_data_path, 'r').read().splitlines()
         self.test_data_list = open(test_data_path, 'r').read().splitlines()
         self.train_data_len = len(self.train_data_list)
+        self.eval_data_len = len(self.eval_data_list)
         self.test_data_len = len(self.test_data_list)
-        self.liver_path = '/datab/cv_data/zhangyao/xyz/data/volume/'
+        self.liver_path = '/dfsdata/zhangyao_data/DB/LITS/volume/'
         self.batch_size = batch_size
         self.liver_size = 128
 
@@ -44,6 +46,13 @@ class DataProvider(object):
         mask = np.load(self.train_data_list[image_id].split(' ')[1])
         mask = (mask > 0)
         return img[..., np.newaxis], mask
+
+    def get_eval_image(self, image_id):
+        img = np.clip(np.load(self.eval_data_list[image_id].split(' ')[0]), -75, 175)
+        img = img[..., np.newaxis]
+        img = img[np.newaxis,...]
+        img = np.array(img, dtype=np.float32)
+        return img
 
     def get_test_image(self, image_id):
         img = np.clip(np.load(self.test_data_list[image_id].split(' ')[0]), -75, 175)

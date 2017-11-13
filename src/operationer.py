@@ -56,52 +56,56 @@ class Operationer(object):
                         summary_writer.add_summary(summary_info, step)
                         summary_writer.flush()
 
-                if self.hps.need_eval:
-                    self.eval(sess, data_provider)
                 self.model.save(sess, save_path)
             logging.info('end training.............')
 
             return save_path
 
-    def eval(self, sess, data_provider):
+    def eval(self, data_provider):
         logging.info('start evaluating.............')
-        img_count = 0
-        dice_list = []
-        for i in range(data_provider.test_data_len):
-            cur_im_id = data_provider.test_data_list[i].split(' ')[0].split('/')[-1].split('.')[1]
+        save_path = os.path.join(self.hps.model_path, 'model.ckpt')
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            ''' restore from file '''
+            self.model.restore(sess, save_path)
 
-            img_count += 1
-            x_test = data_provider.get_test_image(i)
-            output = sess.run(self.model.prediction, feed_dict={self.model.x: x_test})
-            output = np.argmax(output, -1)
-            output = np.reshape(output, (x_test.shape[1], x_test.shape[2]))
-            if img_count == 1:
-                output_3D = output[:, :, np.newaxis]
-            else:
-                output_new = output[:, :, np.newaxis]
-                output_3D = np.concatenate((output_3D, output_new), axis=2)
+            img_count = 0
+            dice_list = []
+            for i in range(data_provider.eval_data_len):
+                cur_im_id = data_provider.eval_data_list[i].split(' ')[0].split('/')[-1].split('.')[1]
 
-                if i < data_provider.test_data_len - 1:
-                    if data_provider.test_data_list[i + 1].split(' ')[0].split('/')[-1].split('.')[1] != cur_im_id:
+                img_count += 1
+                x_eval = data_provider.get_eval_image(i)
+                output = sess.run(self.model.prediction, feed_dict={self.model.x: x_eval})
+                output = np.argmax(output, -1)
+                output = np.reshape(output, (x_eval.shape[1], x_eval.shape[2]))
+                if img_count == 1:
+                    output_3D = output[:, :, np.newaxis]
+                else:
+                    output_new = output[:, :, np.newaxis]
+                    output_3D = np.concatenate((output_3D, output_new), axis=2)
+
+                    if i < data_provider.eval_data_len - 1:
+                        if data_provider.eval_data_list[i + 1].split(' ')[0].split('/')[-1].split('.')[1] != cur_im_id:
+                            output_3D = output_3D.astype(np.uint8)
+                            output_3D = self.connected_filter(output_3D)
+                            path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
+                            liver_region = nib.load(path).get_data() > 0
+                            dice = metric.dc(output_3D, liver_region)
+                            dice_list.append(dice)
+                            logging.info(cur_im_id + ' dice is ' + str(dice))
+                            img_count = 0
+                            continue
+                    if i == data_provider.eval_data_len - 1:
                         output_3D = output_3D.astype(np.uint8)
                         output_3D = self.connected_filter(output_3D)
                         path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
-                        liver_region = nib.load(path).get_data()
+                        liver_region = nib.load(path).get_data() > 0
                         dice = metric.dc(output_3D, liver_region)
                         dice_list.append(dice)
                         logging.info(cur_im_id + ' dice is ' + str(dice))
-                        img_count = 0
-                        continue
-                if i == data_provider.test_data_len - 1:
-                    output_3D = output_3D.astype(np.uint8)
-                    output_3D = self.connected_filter(output_3D)
-                    path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
-                    liver_region = nib.load(path).get_data()
-                    dice = metric.dc(output_3D, liver_region)
-                    dice_list.append(dice)
-                    logging.info(cur_im_id + ' dice is ' + str(dice))
-                    logging.info('dice per case is ' + str(np.mean(dice_list)))
-                    break
+                        logging.info('dice per case is ' + str(np.mean(dice_list)))
+                        break
 
     def test(self, data_provider):
         logging.info('start testing.............')
@@ -115,7 +119,6 @@ class Operationer(object):
             dice_list = []
             for i in range(data_provider.test_data_len):
                 cur_im_id = data_provider.test_data_list[i].split(' ')[0].split('/')[-1].split('.')[1]
-                slice_id = data_provider.test_data_list[i].split(' ')[0].split('/')[-1].split('.')[2]
 
                 img_count += 1
                 x_test = data_provider.get_test_image(i)
@@ -133,22 +136,22 @@ class Operationer(object):
                             output_3D = output_3D.astype(np.uint8)
                             output_3D = self.connected_filter(output_3D)
                             self.save_data(output_3D, cur_im_id)
-                        path = os.path.join(data_provider.liver_path,
-                                            'standard-segmentation-' + str(cur_im_id) + '.nii')
-                        liver_region = nib.load(path).get_data()
+                            path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
+                            liver_region = nib.load(path).get_data() > 0
+                            dice = metric.dc(output_3D, liver_region)
+                            dice_list.append(dice)
+                            logging.info(cur_im_id + ' dice is ' + str(dice))
+                            img_count = 0
+                            continue
+                    if i == data_provider.test_data_len - 1:
+                        output_3D = output_3D.astype(np.uint8)
+                        output_3D = self.connected_filter(output_3D)
+                        self.save_data(output_3D, cur_im_id)
+                        path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
+                        liver_region = nib.load(path).get_data() > 0
                         dice = metric.dc(output_3D, liver_region)
                         dice_list.append(dice)
                         logging.info(cur_im_id + ' dice is ' + str(dice))
-                        img_count = 0
-                        continue
-                if i == data_provider.test_data_len - 1:
-                    output_3D = output_3D.astype(np.uint8)
-                    output_3D = self.connected_filter(output_3D)
-                    self.save_data(output_3D, cur_im_id)
-                    path = os.path.join(data_provider.liver_path, 'standard-segmentation-' + str(cur_im_id) + '.nii')
-                    liver_region = nib.load(path).get_data()
-                    dice = metric.dc(output_3D, liver_region)
-                    dice_list.append(dice)
-                    logging.info(cur_im_id + ' dice is ' + str(dice))
-                    logging.info('dice per case is ' + str(np.mean(dice_list)))
-                    break
+                        logging.info('dice per case is ' + str(np.mean(dice_list)))
+                        break
+

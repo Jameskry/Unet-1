@@ -56,8 +56,8 @@ class Unet(object):
         self.global_step = tf.Variable(0)
 
         ''' input '''
-        self.x = tf.placeholder(tf.float32, shape=[None, None, None, None])
-        self.y = tf.placeholder(tf.uint8, shape=[None, None, None])
+        self.x = tf.placeholder(tf.float32, shape=[None, None, None, self.hps.channels])
+        self.y = tf.placeholder(tf.uint8, shape=[None, None, 1])
         self.y_one_hot = tf.one_hot(indices=self.y, depth=self.hps.class_num)
 
         ''' tensors '''
@@ -73,7 +73,7 @@ class Unet(object):
         ''' build the logits '''
 
         ''' initialize input '''
-        input_x = tf.reshape(self.x, [-1, tf.shape(self.x)[1], tf.shape(self.x)[2], self.hps.channels])
+        input_x = tf.reshape(self.x, [tf.hps.batch_size, tf.shape(self.x)[1], tf.shape(self.x)[2], self.hps.channels])
 
         self.convs = []
         self.pooling_layers = OrderedDict()
@@ -107,8 +107,8 @@ class Unet(object):
             if layer_index < self.hps.layer_num - 1:
                 self.pooling_layers[layer_index] = max_pool(self.encoding_conv_layers[layer_index], self.hps.pool_size)
                 input_x = self.pooling_layers[layer_index]
-            else:
-                input_x = self.encoding_conv_layers[layer_index]
+
+        input_x = self.encoding_conv_layers[self.hps.layer_num - 1]
 
         ''' decoding '''
         for layer_index in range(self.hps.layer_num - 2, -1, -1):
@@ -133,8 +133,8 @@ class Unet(object):
             h_conv = tf.nn.relu(conv1 + b1)
             # conv2 = conv2d(h_conv, w2, keep_prob)
             conv2 = conv2d(h_conv, w2, tf.constant(1.0))
-            input_x = tf.nn.relu(conv2 + b2)
-            self.decoding_conv_layers[layer_index] = input_x
+            self.decoding_conv_layers[layer_index] = tf.nn.relu(conv2 + b2)
+            input_x = self.decoding_conv_layers[layer_index]
 
             self.convs.append((conv1, conv2))
 
@@ -169,7 +169,7 @@ class Unet(object):
         tf.summary.scalar('accuracy', self.accuracy)
         tf.summary.scalar('learning_rate', self.learning_rate)
         tf.summary.image('input', self._get_image_summary(self.x, 0))
-        tf.summary.image('mask', tf.cast(tf.expand_dims(tf.argmax(self.y_one_hot, 3), axis=3), tf.float32))
+        tf.summary.image('label', self._get_image_summary(self.y_one_hot, 1))
         tf.summary.image('output_prob', self._get_image_summary(self.prediction, 1))
         tf.summary.image('output', tf.cast(tf.expand_dims(tf.argmax(self.prediction, 3), axis=3), tf.float32))
 
@@ -199,7 +199,8 @@ class Unet(object):
     def _get_loss(self):
         if self.hps.loss_type == "cross_entropy":
             class_weights = tf.constant(np.array(self.hps.class_weights, dtype=np.float32))
-            loss_map = tf.multiply(self.y_one_hot, tf.log(tf.clip_by_value(self.prediction, 1e-5, 1.0)))
+            prob = tf.nn.softmax(logits + 1e-10)
+            loss_map = tf.multiply(self.y_one_hot, tf.log(tf.clip_by_value(prob, 1e-10, 1.0)))
             loss = -tf.reduce_mean(tf.multiply(loss_map, class_weights))
         elif self.hps.loss_type == "dice_coefficient":
             eps = 1e-5
