@@ -7,7 +7,7 @@ random.seed(datetime.datetime.now().second)
 class DataProvider(object):
     def __init__(self, train_data_path, eval_data_path, test_data_path, batch_size):
         self.train_data_list = open(train_data_path, 'r').read().splitlines()
-        self.eval_data_list = open(train_data_path, 'r').read().splitlines()
+        self.eval_data_list = open(eval_data_path, 'r').read().splitlines()
         self.test_data_list = open(test_data_path, 'r').read().splitlines()
         self.train_data_len = len(self.train_data_list)
         self.eval_data_len = len(self.eval_data_list)

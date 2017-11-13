@@ -4,7 +4,7 @@ from data_provider import DataProvider
 from operationer import Operationer
 
 train_data_path = '../data/train_slice_list.txt'
-train_data_path = '../data/eval_slice_list.txt'
+eval_data_path = '../data/eval_slice_list.txt'
 test_data_path = '../data/test_slice_list.txt'
 model_path = '../model/'
 log_path = '../log/'
@@ -57,10 +57,12 @@ op = Operationer(hps=hps, model=unet)
 data_provider = DataProvider(train_data_path, eval_data_path, test_data_path, hps.batch_size)
 
 flags = tf.app.flags
-flags.DEFINE_string('mode', 'train', 'train or test')
+flags.DEFINE_string('mode', 'train', 'train or eval or test')
 config = flags.FLAGS
 if config.mode == 'train':
     op.train(data_provider)
+elif config.mode == 'eval':
+    op.eval(data_provider)
 elif config.mode == 'test':
     op.test(data_provider)
 else:
